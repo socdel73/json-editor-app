@@ -1,70 +1,53 @@
-import cors from 'cors'; // <-- Importa el paquete 'cors'
-import express, { Request, Response } from 'express';
-import * as fs from 'fs';
-import * as path from 'path';
+import express from "express";
+import fs from "fs";
+import path from "path";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
-const PORT = 3000;
-const DATA_DIR = path.join(__dirname, '../data');
-
-app.use(cors()); // <-- Usa el middleware CORS antes de las rutas
 app.use(express.json());
 
-// Asegura que el directorio de datos existe
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR);
-}
+const PORT = process.env.PORT || 4001;
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "../data");
 
-// Endpoint para obtener la lista de archivos JSON
-app.get('/api/files', (req: Request, res: Response) => {
-  fs.readdir(DATA_DIR, (err, files) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).send('Error al leer el directorio.');
-    }
-    const jsonFiles = files.filter(file => file.endsWith('.json'));
-    res.json(jsonFiles);
-  });
+console.log(`[json-editor] escoltant a http://localhost:${PORT}`);
+console.log(`[json-editor] DATA_DIR = ${DATA_DIR}`);
+
+// Llistar fitxers
+app.get("/editor/api/files", (req, res) => {
+  try {
+    const files = fs
+      .readdirSync(DATA_DIR)
+      .filter((f) => f.endsWith(".json"));
+    res.json(files);
+  } catch (err) {
+    res.status(500).json({ error: "Error reading directory" });
+  }
 });
 
-// Endpoint para leer un archivo JSON
-app.get('/api/file/:fileName', (req: Request, res: Response) => {
-  const { fileName } = req.params;
-  const filePath = path.join(DATA_DIR, fileName);
-
-  fs.readFile(filePath, 'utf8', (err, data) => {
-    if (err) {
-      if (err.code === 'ENOENT') {
-        return res.status(404).send('Archivo no encontrado.');
-      }
-      console.error(err);
-      return res.status(500).send('Error al leer el archivo.');
-    }
-    try {
-      const jsonData = JSON.parse(data);
-      res.json(jsonData);
-    } catch (parseErr) {
-      console.error(parseErr);
-      res.status(500).send('Error al analizar el archivo JSON.');
-    }
-  });
+// Llegir contingut fitxer
+app.get("/editor/api/file/:name", (req, res) => {
+  const filePath = path.join(DATA_DIR, req.params.name);
+  try {
+    const content = fs.readFileSync(filePath, "utf-8");
+    res.json(JSON.parse(content));
+  } catch (err) {
+    res.status(500).json({ error: "Error reading file" });
+  }
 });
 
-// Endpoint para guardar/editar un archivo JSON
-app.post('/api/file/:fileName', (req: Request, res: Response) => {
-  const { fileName } = req.params;
-  const filePath = path.join(DATA_DIR, fileName);
-  const dataToSave = JSON.stringify(req.body, null, 2);
-
-  fs.writeFile(filePath, dataToSave, (err) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).send('Error al guardar el archivo.');
-    }
-    res.status(200).send('Archivo guardado exitosamente.');
-  });
+// Desa contingut fitxer
+app.post("/editor/api/file/:name", (req, res) => {
+  const filePath = path.join(DATA_DIR, req.params.name);
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(req.body, null, 2), "utf-8");
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "Error writing file" });
+  }
 });
 
 app.listen(PORT, () => {
-  console.log(`Servidor Express escuchando en http://localhost:${PORT}`);
+  console.log(`[json-editor] escoltant a http://localhost:${PORT}`);
 });
