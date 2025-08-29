@@ -1,103 +1,132 @@
 import React, { useEffect, useState } from "react";
-import DynamicForm from "./components/DynamicForm";
 
-const AppManager: React.FC = () => {
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [newFileName, setNewFileName] = useState("");
-  const [availableFiles, setAvailableFiles] = useState<string[]>([]);
-  const [loadingFiles, setLoadingFiles] = useState(true);
+const BASE = `${window.location.origin}/editor/api`;
 
+type JsonValue = unknown;
+
+export default function AppManager() {
+  const [files, setFiles] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string>("");
+  const [content, setContent] = useState<JsonValue | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<string>("");
+
+  // Llista de fitxers
   useEffect(() => {
-    const fetchFiles = async () => {
+    (async () => {
       try {
-        const response = await fetch("http://localhost:3000/api/files");
-        if (response.ok) {
-          const files = await response.json();
-          setAvailableFiles(files);
-        } else {
-          console.error("Error al obtener la lista de archivos.");
-        }
-      } catch (error) {
-        console.error(
-          "No se pudo conectar al servidor para obtener la lista de archivos.",
-          error
-        );
-      } finally {
-        setLoadingFiles(false);
+        const res = await fetch(`${BASE}/files`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data: string[] = await res.json();
+        setFiles(data);
+        if (data.length && !selected) setSelected(data[0]);
+      } catch (err: any) {
+        setMsg(`Error carregant llista: ${err.message || err}`);
       }
-    };
-    fetchFiles();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleEditExisting = (selectedFile: string) => {
-    setFileName(selectedFile);
-  };
+  // Carregar contingut quan canvïa el fitxer seleccionat
+  useEffect(() => {
+    if (!selected) return;
+    (async () => {
+      setLoading(true);
+      setMsg("");
+      try {
+        const res = await fetch(`${BASE}/file/${encodeURIComponent(selected)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        setContent(data);
+      } catch (err: any) {
+        setMsg(`Error carregant fitxer: ${err.message || err}`);
+        setContent(null);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [selected]);
 
-  const handleCreateNew = () => {
-    if (newFileName.trim()) {
-      setFileName(
-        newFileName.endsWith(".json") ? newFileName : `${newFileName}.json`
-      );
+  const save = async () => {
+    if (!selected) return;
+    setMsg("");
+    try {
+      const res = await fetch(`${BASE}/file/${encodeURIComponent(selected)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(content, null, 2),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setMsg("Desat correctament ✅");
+    } catch (err: any) {
+      setMsg(`Error desant: ${err.message || err}`);
     }
   };
 
-  const handleBack = () => {
-    setFileName(null);
+  const onTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    try {
+      const parsed = JSON.parse(e.target.value || "null");
+      setContent(parsed);
+      setMsg("");
+    } catch {
+      // No invalidem l’estat: només mostrem que el JSON no és vàlid
+      setMsg("JSON no vàlid (revisa les cometes/comes)");
+    }
   };
 
-  if (fileName) {
-    return (
-      <div>
-        <button onClick={handleBack} style={{ marginBottom: "20px" }}>
-          &lt; Volver al menú
-        </button>
-        <DynamicForm fileName={fileName} key={fileName} />
-      </div>
-    );
-  }
-
   return (
-    <div style={{ padding: "20px", textAlign: "center" }}>
-      <h2>Bienvenido al Editor de JSON</h2>
-      <p>Selecciona una opción:</p>
+    <div style={{ maxWidth: 960, margin: "0 auto", padding: 16 }}>
+      <h1>JSON Editor</h1>
 
-      {loadingFiles ? (
-        <p>Cargando lista de archivos...</p>
-      ) : (
-        <div style={{ marginBottom: "20px" }}>
-          <h3>Editar un archivo existente</h3>
-          <select
-            onChange={(e) => handleEditExisting(e.target.value)}
-            style={{ padding: "8px", marginRight: "10px" }}
-          >
-            <option value="">Seleccionar un archivo...</option>
-            {availableFiles.map((file) => (
-              <option key={file} value={file}>
-                {file}
-              </option>
-            ))}
-          </select>
+      {msg && (
+        <div
+          style={{
+            background: "#222",
+            color: "#fff",
+            padding: 8,
+            borderRadius: 6,
+            marginBottom: 12,
+          }}
+        >
+          {msg}
         </div>
       )}
 
-      <div>
-        <h3>Crear un nuevo archivo</h3>
-        <input
-          type="text"
-          placeholder="Nombre del archivo (ej: SONY_VENICE_2)"
-          value={newFileName}
-          onChange={(e) => setNewFileName(e.target.value)}
-          style={{ width: "300px", padding: "10px" }}
-        />
-        <button
-          onClick={handleCreateNew}
-          style={{ padding: "10px 20px", marginLeft: "10px" }}
+      <label>
+        Fitxer:&nbsp;
+        <select
+          value={selected}
+          onChange={(e) => setSelected(e.target.value)}
+          style={{ minWidth: 280 }}
         >
-          Crear nuevo
+          <option value="" disabled>
+            — selecciona —
+          </option>
+          {files.map((f) => (
+            <option key={f} value={f}>
+              {f}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div style={{ marginTop: 12 }}>
+        <button onClick={save} disabled={!selected || loading}>
+          Desar
         </button>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <textarea
+          rows={24}
+          style={{ width: "100%", fontFamily: "monospace" }}
+          value={
+            content === null ? "" : JSON.stringify(content, null, 2)
+          }
+          onChange={onTextChange}
+          placeholder="Enganxa o edita JSON aquí…"
+        />
       </div>
     </div>
   );
-};
-
-export default AppManager;
+}
