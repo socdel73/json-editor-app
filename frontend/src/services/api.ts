@@ -1,37 +1,30 @@
-const API_URL = 'http://localhost:3000/api/file';
-
-// Función para obtener los datos de un archivo JSON
-export const getFileContent = async (fileName: string) => {
-  try {
-    const response = await fetch(`${API_URL}/${fileName}`);
-    if (!response.ok) {
-      throw new Error(`Error: ${response.statusText}`);
-    }
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error("Error al obtener el archivo:", error);
-    return null;
+export async function getFileContent(fileName: string) {
+  const BASE = `${window.location.origin}/editor/api`;
+  const response = await fetch(`${BASE}/file/${encodeURIComponent(fileName)}`);
+  if (!response.ok) {
+    throw new Error("Error loading file");
   }
-};
+  return await response.json();
+}
 
-// Función para guardar los datos en un archivo JSON
-export const saveFileContent = async (fileName: string, content: any) => {
-  try {
-    const response = await fetch(`${API_URL}/${fileName}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(content),
-    });
-    if (!response.ok) {
-      throw new Error(`Error: ${response.statusText}`);
-    }
-    const result = await response.text();
-    return result;
-  } catch (error) {
-    console.error("Error al guardar el archivo:", error);
-    return null;
+export async function saveFileContent(fileName: string, content: any) {
+  const BASE = `${window.location.origin}/editor/api`;
+  const response = await fetch(`${BASE}/file/${encodeURIComponent(fileName)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(content, null, 2),
+  });
+  if (!response.ok) {
+    throw new Error("Error saving file");
   }
-};
+  return await response.json();
+}
+
+export async function getFileList(): Promise<string[]> {
+  const BASE = `${window.location.origin}/editor/api`;
+  const response = await fetch(`${BASE}/files`);
+  if (!response.ok) {
+    throw new Error("Error loading file list");
+  }
+  return await response.json();
+}
